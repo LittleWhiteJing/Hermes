@@ -3,7 +3,8 @@ package main
 import (
 	"fmt"
 	"net/http"
-	"github.com/TyrellJing/Hermes/routers"
+	"github.com/TyrellJing/Hermes/router"
+	"github.com/TyrellJing/Hermes/server"
 )
 
 func helloWorldHandler(w http.ResponseWriter, r *http.Request) {
@@ -15,8 +16,9 @@ func sayGoodbyeHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	r := routers.NewRouter()
+	r := router.NewRouter()
 	r.GET("/helloworld", helloWorldHandler)
 	r.GET("/saygoodbye", sayGoodbyeHandler)
-	http.ListenAndServe(":8000", r)
+	s := server.NewServer(*r, "8000")
+	s.ListenAndServe()
 }
