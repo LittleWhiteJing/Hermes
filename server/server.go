@@ -18,8 +18,8 @@ import (
 const (
 	GRACEFUL_ENVIRON_KEY 	= "IS_GRACEFUL"
 	GRACEFUL_ENVIRON_STRING = GRACEFUL_ENVIRON_KEY + "=1"
-	GRACEFUL_LISTENER_FD 	= 5
-	HANDLE_TIMEOUT 		 	= 300 * time.Second
+	GRACEFUL_LISTENER_FD 	= 3
+	REQUEST_TIMEOUT 		= 300 * time.Second
 )
 
 type Server struct {
@@ -34,11 +34,16 @@ type Server struct {
 func NewServer(handler router.Router, port string) *Server {
 	server := new(Server)
 
+	isGraceful := false
+	if os.Getenv(GRACEFUL_ENVIRON_KEY) != "" {
+		isGraceful = true
+	}
+
 	server.httpServer = &http.Server{
-		Handler: http.TimeoutHandler(&handler, HANDLE_TIMEOUT, "time out"),
+		Handler: http.TimeoutHandler(&handler, REQUEST_TIMEOUT, "time out"),
 		Addr:	 ":" + port,
 	}
-	server.isGraceful = true
+	server.isGraceful = isGraceful
 	server.signalChan = make(chan os.Signal)
 
 	return server
@@ -47,12 +52,10 @@ func NewServer(handler router.Router, port string) *Server {
 func (srv *Server) ListenAndServe() (err error) {
 	addr := srv.httpServer.Addr
 
-	ln, err := srv.getNetListener(addr)
-
-	fmt.Printf("%#v\n", err)
+	var ln net.Listener
+	ln, err = srv.getNetListener(addr)
 
 	if err != nil {
-		srv.logf("server started already!")
 		return
 	}
 
