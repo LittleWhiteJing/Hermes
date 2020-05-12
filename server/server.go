@@ -2,14 +2,14 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
 	"github.com/TyrellJing/Hermes/router"
 	"os/signal"
-	"runtime"
-	"runtime/pprof"
 	"strconv"
 	"syscall"
 	"time"
@@ -19,7 +19,6 @@ const (
 	GRACEFUL_ENVIRON_KEY 	= "IS_GRACEFUL"
 	GRACEFUL_ENVIRON_STRING = GRACEFUL_ENVIRON_KEY + "=1"
 	GRACEFUL_LISTENER_FD 	= 3
-	REQUEST_TIMEOUT 		= 300 * time.Second
 )
 
 type Server struct {
@@ -29,22 +28,27 @@ type Server struct {
 	isGraceful 		bool
 	signalChan 		chan os.Signal
 	shutdownChan 	chan bool
+
+	TLSConfig		*tls.Config
+
 }
 
-func NewServer(handler router.Router, port string) *Server {
-	server := new(Server)
-
+func NewServer(handler router.Router, addr string, readTimeout, writeTimeout time.Duration) *Server {
 	isGraceful := false
 	if os.Getenv(GRACEFUL_ENVIRON_KEY) != "" {
 		isGraceful = true
 	}
 
+	server := new(Server)
 	server.httpServer = &http.Server{
-		Handler: http.TimeoutHandler(&handler, REQUEST_TIMEOUT, "time out"),
-		Addr:	 ":" + port,
+		Addr:	 		addr,
+		Handler: 		&handler,
+		ReadTimeout:	readTimeout,
+		WriteTimeout:	writeTimeout,
 	}
 	server.isGraceful = isGraceful
 	server.signalChan = make(chan os.Signal)
+	server.shutdownChan = make(chan bool)
 
 	return server
 }
@@ -64,6 +68,36 @@ func (srv *Server) ListenAndServe() (err error) {
 
 	return srv.Serve()
 }
+
+func (srv *Server) ListenAndServeTLS(certFile, keyFile string) (err error) {
+	addr := srv.httpServer.Addr
+	if addr == "" {
+		addr = ":https"
+	}
+
+	config := &tls.Config{}
+	if srv.TLSConfig != nil {
+		*config = *srv.TLSConfig
+	}
+
+	if config.NextProtos == nil {
+		config.NextProtos = []string{"http/1.1"}
+	}
+
+	config.Certificates = make([]tls.Certificate, 1)
+	config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return
+	}
+
+	ln, err := srv.getNetListener(addr)
+	if err != nil {
+		return
+	}
+	srv.listener = tls.NewListener(ln, config)
+	return srv.Serve()
+}
+
 
 func (srv *Server) getNetListener(addr string) (ln net.Listener, err error) {
 	if srv.isGraceful {
@@ -101,53 +135,32 @@ func (srv *Server) handleSignals() {
 
 	signal.Notify(
 		srv.signalChan,
-		syscall.SIGUSR1,
-		syscall.SIGHUP,
+		syscall.SIGINT,
+		syscall.SIGTERM,
 		syscall.SIGUSR2,
 	)
 
 	for {
 		sig = <-srv.signalChan
 		switch sig {
-		case syscall.SIGHUP:
-			srv.logf("received SIGHUP, graceful restarting HTTP server")
-
-			if pid, err := srv.startNew(); err != nil {
-				srv.logf("start new process failed: " + err.Error() + ", continue serving")
-			} else {
-				ppid := strconv.FormatUint(uint64(pid), 10)
-				srv.logf("start new process successed, the new pid is " + ppid)
-
-				srv.shutDown()
-			}
+		case syscall.SIGTERM, syscall.SIGINT:
+			srv.logf("received SIGTERM, graceful shutting down HTTP server.")
+			srv.shutdownHTTPServer()
 		case syscall.SIGUSR2:
-			buf := make([]byte, 1638400)
-			buf = buf[:runtime.Stack(buf, true)]
-			fmt.Println(string(buf))
-			srv.logf("goroutine stack output to stack.log")
+			srv.logf("received SIGUSR2, graceful restarting HTTP server.")
 
-			memory, err := os.OpenFile("/dev/shm/memory.log", os.O_RDWR|os.O_CREATE, 0644)
-			if err != nil {
-				srv.logf(err.Error())
+			if pid, err := srv.startNewProcess(); err != nil {
+				srv.logf("start new process failed: %v, continue serving.", err)
+			} else {
+				srv.logf("start new process successed, the new pid is %d", pid)
+				srv.shutdownHTTPServer()
 			}
-			defer memory.Close()
-			pprof.WriteHeapProfile(memory)
-
-			cpu, err := os.OpenFile("/dev/shm/cpu.log", os.O_RDWR|os.O_CREATE, 0644)
-			if err != nil {
-				srv.logf(err.Error())
-			}
-			pprof.StartCPUProfile(cpu)
-
-			time.Sleep(30 * time.Second)
-			pprof.StopCPUProfile()
-			cpu.Close()
 		default:
 		}
 	}
 }
 
-func (srv *Server) shutDown() {
+func (srv *Server) shutdownHTTPServer() {
 	if err := srv.httpServer.Shutdown(context.Background()); err != nil {
 		srv.logf("HTTP server shutdown error: " + err.Error())
 	} else {
@@ -156,10 +169,10 @@ func (srv *Server) shutDown() {
 	}
 }
 
-func (srv *Server) startNew() (uintptr, error) {
-	file, err := srv.listener.(*net.TCPListener).File()
+func (srv *Server) startNewProcess() (fd uintptr, err error) {
+	listenerFd, err := srv.getTCPListenerFd()
 	if err != nil {
-		return 0, err
+		return
 	}
 
 	envs := []string{}
@@ -172,7 +185,7 @@ func (srv *Server) startNew() (uintptr, error) {
 
 	execSpec := &syscall.ProcAttr{
 		Env:   envs,
-		Files: []uintptr{os.Stdin.Fd(), os.Stdout.Fd(), os.Stderr.Fd(), file.Fd()},
+		Files: []uintptr{os.Stdin.Fd(), os.Stdout.Fd(), os.Stderr.Fd(), listenerFd},
 	}
 
 	fork, err := syscall.ForkExec(os.Args[0], os.Args, execSpec)
@@ -183,11 +196,19 @@ func (srv *Server) startNew() (uintptr, error) {
 	return uintptr(fork), nil
 }
 
-func (srv *Server) logf(format string) {
+func (srv *Server) getTCPListenerFd() (fd uintptr, err error) {
+	file, err := srv.listener.(*net.TCPListener).File()
+	if err != nil {
+		return
+	}
+	return file.Fd(), nil
+}
+
+func (srv *Server) logf(format string, args ...interface{}) {
 	pid := strconv.Itoa(os.Getpid())
 	format = "[pid:" + pid + "] " + format
 
-	fmt.Println(format)
+	log.Printf(format, args...)
 }
 
 
