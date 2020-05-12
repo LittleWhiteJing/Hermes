@@ -11,7 +11,7 @@ type MethodTree struct {
 	handlerChain 	[]http.HandlerFunc
 }
 
-func NewMethodTree() *MethodTree {
+func newMethodTree() *MethodTree {
 	root := new(MethodTree)
 	root.childTree = make(map[rune]*MethodTree, MAX_TRIE_CHILD_NODES)
 	return root

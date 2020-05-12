@@ -20,28 +20,28 @@ func NewRouter() *Router {
 }
 
 func (r *Router) GET(path string, handle http.HandlerFunc) {
-	r.handle(http.MethodGet, path, handle)
+	r.Handle(http.MethodGet, path, handle)
 }
 
 func (r *Router) POST(path string, handle http.HandlerFunc) {
-	r.handle(http.MethodPost, path, handle)
+	r.Handle(http.MethodPost, path, handle)
 }
 
 func (r *Router) PUT(path string, handle http.HandlerFunc) {
-	r.handle(http.MethodGet, path, handle)
+	r.Handle(http.MethodPut, path, handle)
 }
 
 func (r *Router) DELETE(path string, handle http.HandlerFunc) {
-	r.handle(http.MethodPost, path, handle)
+	r.Handle(http.MethodDelete, path, handle)
 }
 
-func (r *Router) handle(method, path string, handle http.HandlerFunc) {
+func (r *Router) Handle(method, path string, handle http.HandlerFunc) {
 	if r.methodTrees == nil {
 		r.methodTrees = make(map[string]*MethodTree)
 	}
 	root := r.methodTrees[method]
 	if root == nil {
-		root = NewMethodTree()
+		root = newMethodTree()
 		r.methodTrees[method] = root
 	}
 	handlers := []http.HandlerFunc{handle}
