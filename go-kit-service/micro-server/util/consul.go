@@ -1,6 +1,7 @@
 package util
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/google/uuid"
@@ -9,9 +10,9 @@ import (
 
 var (
 	consoleClient *consulapi.Client
-	serviceID	string
-	serviceName string
-	servicePort int
+	ServiceID	string
+	ServiceName string
+	ServicePort int
 )
 
 func init() {
@@ -22,25 +23,25 @@ func init() {
 		log.Fatal(err)
 	}
 	consoleClient = client
-	serviceID = "userservice" + uuid.New().String()
+	ServiceID = "userservice" + uuid.New().String()
 }
 
 func SetServicePortAndName(name string, port int) {
-	serviceName = name
-	servicePort = port
+	ServiceName = name
+	ServicePort = port
 }
 
 func RegisterService () {
 	reg := consulapi.AgentServiceRegistration{}
-	reg.ID = serviceID
-	reg.Name = serviceName
-	reg.Port = servicePort
+	reg.ID = ServiceID
+	reg.Name = ServiceName
+	reg.Port = ServicePort
 	reg.Address = "192.168.1.104"
 	reg.Tags = []string{"primary"}
 
 	check := consulapi.AgentServiceCheck{}
 	check.Interval = "5s"
-	check.HTTP = "http://192.168.1.104:8080/health"
+	check.HTTP = fmt.Sprintf("http://%s:%d/health", reg.Address, ServicePort)
 	reg.Check = &check
 
 	err := consoleClient.Agent().ServiceRegister(&reg)
@@ -50,5 +51,5 @@ func RegisterService () {
 }
 
 func UnRegisterService () {
-	consoleClient.Agent().ServiceDeregister(serviceID)
+	consoleClient.Agent().ServiceDeregister(ServiceID)
 }

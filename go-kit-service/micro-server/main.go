@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"golang.org/x/time/rate"
 	"log"
 	"net/http"
 	"os"
@@ -29,7 +30,8 @@ func main() {
 	util.SetServicePortAndName(*name, *port)
 
 	userService := Services.UserService{}
-	endPoint := Services.GenUserEndpoint(userService)
+	limit := rate.NewLimiter(1, 3)
+	endPoint := Services.RateLimit(limit)(Services.GenUserEndpoint(userService))
 	serverHandler := httptransport.NewServer(endPoint, Services.DecodeUserRequest, Services.EncodeUserResponse)
 
 	r := mux.NewRouter()

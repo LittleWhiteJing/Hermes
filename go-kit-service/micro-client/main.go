@@ -2,12 +2,14 @@ package main
 
 import (
 	"fmt"
+	"github.com/go-kit/kit/sd/lb"
 	"io"
 	"net/url"
 	"log"
 	"context"
 	"os"
 	"micro-client/Services"
+	"time"
 
 	"github.com/go-kit/kit/endpoint"
 	"github.com/go-kit/kit/sd"
@@ -66,12 +68,20 @@ func consulConnect() {
 	}
 	fmt.Println("发现", len(endpoints), "个服务")
 
-	getUserInfo := endpoints[0]
-	res, err := getUserInfo(context.Background(), Services.UserRequest{Uid: 102})
-	if err != nil {
-		log.Fatal(err)
-	}
-	userInfo := res.(Services.UserResponse)
-	fmt.Println(userInfo.Result)
+	//endpointlb := lb.NewRoundRobin(endpointer)
+	endpointlb := lb.NewRandom(endpointer, time.Now().UnixNano())
 
+	for {
+		getUserInfo, err := endpointlb.Endpoint()
+		if err != nil {
+			log.Fatal(err)
+		}
+		res, err := getUserInfo(context.Background(), Services.UserRequest{Uid: 102})
+		if err != nil {
+			log.Fatal(err)
+		}
+		userInfo := res.(Services.UserResponse)
+		fmt.Println(userInfo.Result)
+		time.Sleep(time.Second * 2)
+	}
 }
