@@ -12,14 +12,19 @@ import (
 
 func DecodeUserRequest (ctx context.Context, r *http.Request) (interface{}, error) {
 	vars := mux.Vars(r)
+	var userRequest UserRequest
 	if userid, ok := vars["userid"]; ok {
 		uid, _ := strconv.Atoi(userid)
-		return UserRequest{
-			Uid: uid,
-			Method: r.Method,
-		}, nil
+		userRequest.Uid = uid
+	} else {
+		return nil, errors.New("Invalid Params")
 	}
-	return nil, errors.New("参数错误！")
+	if token := r.URL.Query().Get("token"); token != "" {
+		userRequest.Token = token
+	} else {
+		return nil, errors.New("Invalid Params")
+	}
+	return userRequest, nil
 }
 
 func EncodeUserResponse (ctx context.Context, w http.ResponseWriter, response interface{}) error {

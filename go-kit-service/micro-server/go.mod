@@ -4,6 +4,7 @@ go 1.15
 
 require (
 	github.com/armon/go-metrics v0.3.4 // indirect
+	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/go-kit/kit v0.10.0
 	github.com/google/uuid v1.1.1
 	github.com/gorilla/mux v1.8.0
@@ -22,6 +23,7 @@ require (
 	github.com/mitchellh/mapstructure v1.3.3 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/stretchr/testify v1.6.1 // indirect
+	github.com/tidwall/gjson v1.6.1
 	golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a // indirect
 	golang.org/x/net v0.0.0-20200904194848-62affa334b73 // indirect
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208 // indirect

@@ -3,8 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
-	"golang.org/x/time/rate"
 	"log"
+	"golang.org/x/time/rate"
+	kitlog "github.com/go-kit/kit/log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -29,17 +30,32 @@ func main() {
 	}
 	util.SetServicePortAndName(*name, *port)
 
+	var logger kitlog.Logger
+	{
+		logger = kitlog.NewLogfmtLogger(os.Stdout)
+		logger = kitlog.WithPrefix(logger, "micro-srv", "1.0")
+		logger = kitlog.With(logger, "time", kitlog.DefaultTimestampUTC)
+		logger = kitlog.With(logger, "caller", kitlog.DefaultCaller)
+	}
+
+	//accessservice
+	accessService := Services.AccessService{}
+	accessEndpoint := Services.AccessEndpoint(accessService)
+	accessHandler := httptransport.NewServer(accessEndpoint, Services.DecodeAccessRequest, Services.EncodeUserResponse)
+
+	//userservice
 	userService := Services.UserService{}
 	limit := rate.NewLimiter(1, 3)
-	endPoint := Services.RateLimit(limit)(Services.GenUserEndpoint(userService))
-
+	UserendPoint := Services.RateLimit(limit)(Services.SrvLogger(logger)(Services.UserAuth()(Services.GenUserEndpoint(userService))))
 	options := []httptransport.ServerOption{
 		httptransport.ServerErrorEncoder(Services.AppErrorEncoder),
 	}
-
-	serverHandler := httptransport.NewServer(endPoint, Services.DecodeUserRequest, Services.EncodeUserResponse, options...)
+	serverHandler := httptransport.NewServer(UserendPoint, Services.DecodeUserRequest, Services.EncodeUserResponse, options...)
 
 	r := mux.NewRouter()
+
+	r.Methods("POST").Path("/access/token").Handler(accessHandler)
+
 	r.Methods("GET", "DELETE").Path(`/user/{userid:\d+}`).Handler(serverHandler)
 
 	r.Methods("GET").Path("/health").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
