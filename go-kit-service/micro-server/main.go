@@ -32,7 +32,12 @@ func main() {
 	userService := Services.UserService{}
 	limit := rate.NewLimiter(1, 3)
 	endPoint := Services.RateLimit(limit)(Services.GenUserEndpoint(userService))
-	serverHandler := httptransport.NewServer(endPoint, Services.DecodeUserRequest, Services.EncodeUserResponse)
+
+	options := []httptransport.ServerOption{
+		httptransport.ServerErrorEncoder(Services.AppErrorEncoder),
+	}
+
+	serverHandler := httptransport.NewServer(endPoint, Services.DecodeUserRequest, Services.EncodeUserResponse, options...)
 
 	r := mux.NewRouter()
 	r.Methods("GET", "DELETE").Path(`/user/{userid:\d+}`).Handler(serverHandler)

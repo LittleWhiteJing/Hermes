@@ -2,86 +2,31 @@ package main
 
 import (
 	"fmt"
-	"github.com/go-kit/kit/sd/lb"
-	"io"
-	"net/url"
 	"log"
-	"context"
-	"os"
-	"micro-client/Services"
-	"time"
+	"micro-client/util"
 
-	"github.com/go-kit/kit/endpoint"
-	"github.com/go-kit/kit/sd"
-	"github.com/go-kit/kit/sd/consul"
-	httptransport "github.com/go-kit/kit/transport/http"
-	consulapi "github.com/hashicorp/consul/api"
-	kitlog "github.com/go-kit/kit/log"
+	hystrix "github.com/afex/hystrix-go/hystrix"
 )
 
 func main() {
-	//directConnect()
-	consulConnect()
-}
-
-func directConnect() {
-	tg, err := url.Parse("http://localhost:8080")
+	cfg := hystrix.CommandConfig{
+		Timeout: 2000,
+		MaxConcurrentRequests: 5,
+		RequestVolumeThreshold: 3,
+		ErrorPercentThreshold: 20,
+		SleepWindow: 100,
+	}
+	hystrix.ConfigureCommand("calluserservice", cfg)
+	err := hystrix.Do("calluserservice", func() error {
+		res, err := util.ConsulConnect()
+		fmt.Println(res)
+		return err
+	}, func(err error) error {
+		fmt.Println("降级用户")
+		return err
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
-	client := httptransport.NewClient("GET", tg, Services.GetUserInfoRequest, Services.GetUserInfoResponse)
-	getUserInfo := client.Endpoint()
-	res, err := getUserInfo(context.Background(), Services.UserRequest{Uid: 101})
-	if err != nil {
-		log.Fatal(err)
-	}
-	userInfo := res.(Services.UserResponse)
-	fmt.Println(userInfo.Result)
-}
 
-func consulConnect() {
-	cfg := consulapi.DefaultConfig()
-	cfg.Address = "http://localhost:8500"
-	api_client, err := consulapi.NewClient(cfg)
-	if err != nil {
-		log.Fatal(err)
-	}
-	client := consul.NewClient(api_client)
-	var logger kitlog.Logger
-	logger = kitlog.NewLogfmtLogger(os.Stdout)
-
-	tags := []string{"primary"}
-	instance := consul.NewInstancer(client, logger, "userservice", tags, true)
-
-	f := func(instance string) (endpoint.Endpoint, io.Closer, error) {
-		tg, err := url.Parse("http://"+instance)
-		if err != nil {
-			log.Fatal(err)
-		}
-		return httptransport.NewClient("GET", tg, Services.GetUserInfoRequest, Services.GetUserInfoResponse).Endpoint(), nil, nil
-	}
-
-	endpointer := sd.NewEndpointer(instance, f, logger)
-	endpoints, err := endpointer.Endpoints()
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println("发现", len(endpoints), "个服务")
-
-	//endpointlb := lb.NewRoundRobin(endpointer)
-	endpointlb := lb.NewRandom(endpointer, time.Now().UnixNano())
-
-	for {
-		getUserInfo, err := endpointlb.Endpoint()
-		if err != nil {
-			log.Fatal(err)
-		}
-		res, err := getUserInfo(context.Background(), Services.UserRequest{Uid: 102})
-		if err != nil {
-			log.Fatal(err)
-		}
-		userInfo := res.(Services.UserResponse)
-		fmt.Println(userInfo.Result)
-		time.Sleep(time.Second * 2)
-	}
 }

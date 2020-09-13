@@ -2,10 +2,10 @@ package Services
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"golang.org/x/time/rate"
 	"micro-server/util"
+	"net/http"
 	"strconv"
 
 	"github.com/go-kit/kit/endpoint"
@@ -24,7 +24,7 @@ func RateLimit(limit *rate.Limiter) endpoint.Middleware {
 	return func(next endpoint.Endpoint) endpoint.Endpoint {
 		return func(ctx context.Context, request interface{}) (response interface{}, err error) {
 			if !limit.Allow() {
-				return nil, errors.New("To Many Requests")
+				return nil, util.NewAppError(429,"To Many Requests")
 			}
 			return next(ctx, request)
 		}
@@ -49,3 +49,17 @@ func GenUserEndpoint(userService IUserService) endpoint.Endpoint {
 		return UserResponse{ Result: result }, nil
 	}
 }
+
+func AppErrorEncoder(_ context.Context, err error, w http.ResponseWriter) {
+	contentType, body := "text/plain; charset=utf-8", []byte(err.Error())
+	w.Header().Set("Content-Type", contentType)
+	if appErr, ok := err.(*util.AppError); ok {
+		w.WriteHeader(appErr.Code)
+	} else {
+		w.WriteHeader(500)
+	}
+	w.Write(body)
+}
+
+
+
