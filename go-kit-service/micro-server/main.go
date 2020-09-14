@@ -3,8 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
+	kitprometheus "github.com/go-kit/kit/metrics/prometheus"
 	httptransport "github.com/go-kit/kit/transport/http"
 	"github.com/gorilla/mux"
+	stdprometheus "github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/time/rate"
 	"log"
 	"micro-server/internal/endpoint"
@@ -39,16 +42,33 @@ func main() {
 	accessEndpoint := endpoint.AccessEndpoint(accessService)
 	accessHandler := httptransport.NewServer(accessEndpoint, transport.DecodeAccessRequest, transport.EncodeUserResponse)
 
+	fieldKeys := []string{"method"}
+	requestCount := kitprometheus.NewCounterFrom(stdprometheus.CounterOpts{
+		Namespace: "raysonxin",
+		Subsystem: "arithmetic_service",
+		Name:      "request_count",
+		Help:      "Number of requests received.",
+	}, fieldKeys)
+
+	requestLatency := kitprometheus.NewSummaryFrom(stdprometheus.SummaryOpts{
+		Namespace: "raysonxin",
+		Subsystem: "arithemetic_service",
+		Name:      "request_latency",
+		Help:      "Total duration of requests in microseconds.",
+	}, fieldKeys)
+
 	//userservice
 	userService := service.UserService{}
 	limit := rate.NewLimiter(1, 3)
-	UserendPoint := middleware.RateLimit(limit)(middleware.SrvLogger(logger)(middleware.JwtAuth()(endpoint.GenUserEndpoint(userService))))
+	UserendPoint := middleware.SrvMonitor(requestCount, requestLatency)(middleware.RateLimit(limit)(middleware.SrvLogger(logger)(middleware.JwtAuth()(endpoint.GenUserEndpoint(userService)))))
 	options := []httptransport.ServerOption{
 		httptransport.ServerErrorEncoder(endpoint.AppErrorEncoder),
 	}
 	serverHandler := httptransport.NewServer(UserendPoint, transport.DecodeUserRequest, transport.EncodeUserResponse, options...)
 
 	r := mux.NewRouter()
+
+	r.Path("/metrics").Handler(promhttp.Handler())
 
 	r.Methods("POST").Path("/access/token").Handler(accessHandler)
 
@@ -72,7 +92,7 @@ func main() {
 			ServiceID: serviceID,
 			ServiceName: *name,
 			ServicePort: *port,
-			ServiceAddr: "10.17.34.145",
+			ServiceAddr: "192.168.1.104",
 			ServiceTags: []string{"primary"},
 		}
 		srvCheck := consul.ServiceCheck{
