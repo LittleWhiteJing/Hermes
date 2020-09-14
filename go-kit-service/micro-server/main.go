@@ -3,54 +3,50 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
+	httptransport "github.com/go-kit/kit/transport/http"
+	"github.com/gorilla/mux"
 	"golang.org/x/time/rate"
-	kitlog "github.com/go-kit/kit/log"
+	"log"
+	"micro-server/internal/endpoint"
+	"micro-server/internal/service"
+	"micro-server/internal/transport"
+	"micro-server/middleware"
+	"micro-server/registry"
+	"micro-server/registry/consul"
+	"micro-server/util"
 	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
 	"syscall"
-	"micro-server/Services"
-	"micro-server/util"
-
-	"github.com/gorilla/mux"
-	httptransport "github.com/go-kit/kit/transport/http"
+	"time"
 )
 
 func main() {
-	name := flag.String("name", "","服务名称")
-	port := flag.Int("port", 0, "服务端口")
+	name := flag.String("name", "","Service Name")
+	port := flag.Int("port", 0, "Service Port")
 	flag.Parse()
 	if *name == "" {
-		log.Fatal("请指定服务名")
+		log.Fatal("Please Set Service Name")
 	}
 	if *port == 0 {
-		log.Fatal("请指定端口号")
+		log.Fatal("Please Set Service Port")
 	}
-	util.SetServicePortAndName(*name, *port)
-
-	var logger kitlog.Logger
-	{
-		logger = kitlog.NewLogfmtLogger(os.Stdout)
-		logger = kitlog.WithPrefix(logger, "micro-srv", "1.0")
-		logger = kitlog.With(logger, "time", kitlog.DefaultTimestampUTC)
-		logger = kitlog.With(logger, "caller", kitlog.DefaultCaller)
-	}
+	logger := util.GetLogger()
 
 	//accessservice
-	accessService := Services.AccessService{}
-	accessEndpoint := Services.AccessEndpoint(accessService)
-	accessHandler := httptransport.NewServer(accessEndpoint, Services.DecodeAccessRequest, Services.EncodeUserResponse)
+	accessService := service.AccessService{}
+	accessEndpoint := endpoint.AccessEndpoint(accessService)
+	accessHandler := httptransport.NewServer(accessEndpoint, transport.DecodeAccessRequest, transport.EncodeUserResponse)
 
 	//userservice
-	userService := Services.UserService{}
+	userService := service.UserService{}
 	limit := rate.NewLimiter(1, 3)
-	UserendPoint := Services.RateLimit(limit)(Services.SrvLogger(logger)(Services.UserAuth()(Services.GenUserEndpoint(userService))))
+	UserendPoint := middleware.RateLimit(limit)(middleware.SrvLogger(logger)(middleware.JwtAuth()(endpoint.GenUserEndpoint(userService))))
 	options := []httptransport.ServerOption{
-		httptransport.ServerErrorEncoder(Services.AppErrorEncoder),
+		httptransport.ServerErrorEncoder(endpoint.AppErrorEncoder),
 	}
-	serverHandler := httptransport.NewServer(UserendPoint, Services.DecodeUserRequest, Services.EncodeUserResponse, options...)
+	serverHandler := httptransport.NewServer(UserendPoint, transport.DecodeUserRequest, transport.EncodeUserResponse, options...)
 
 	r := mux.NewRouter()
 
@@ -65,9 +61,26 @@ func main() {
 
 	errC := make(chan error)
 
+	serviceID := string(time.Now().UnixNano())
+	consulOpt, err := consul.NewConsulRegister(consul.SetConsulClient("127.0.0.1:8500"))
+	if err != nil {
+		log.Fatal(err)
+	}
 	go func() {
-		util.RegisterService()
-		err := http.ListenAndServe(":"+strconv.Itoa(*port), r)
+		var err error
+		srv := registry.Service{
+			ServiceID: serviceID,
+			ServiceName: *name,
+			ServicePort: *port,
+			ServiceAddr: "10.17.34.145",
+			ServiceTags: []string{"primary"},
+		}
+		srvCheck := consul.ServiceCheck{
+			CheckAddr: fmt.Sprintf("http://%s:%d/health", srv.ServiceAddr, srv.ServicePort),
+			CheckIntval: "5s",
+		}
+		err = consulOpt.RegisterService(srv, srvCheck)
+		err = http.ListenAndServe(":"+strconv.Itoa(*port), r)
 		if err != nil {
 			errC <- err
 		}
@@ -80,6 +93,6 @@ func main() {
 	}()
 
 	getErr := <-errC
-	util.UnRegisterService()
+	consulOpt.UnRegisterService(serviceID)
 	fmt.Println(getErr)
 }
