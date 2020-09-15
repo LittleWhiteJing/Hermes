@@ -1,6 +1,12 @@
 version: '2'
 
 services:
+  consul:
+    image: consul
+    ports:
+      - 8500:8500
+    hostname: consulserver
+    command: agent -server -bootstrap -ui -client 0.0.0.0
   prometheus:
     image: prom/prometheus
     ports:
