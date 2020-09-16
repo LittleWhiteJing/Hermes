@@ -1,0 +1,14 @@
+syntax="proto3";
+option go_package = ".;userservice";
+message UserServiceRequest {
+	int32  Uid = 1;
+	string Method = 2;
+	string Token  = 3;
+}
+message UserServiceResponse {
+	string Result = 1;
+}
+service UserService {
+	rpc GetUsername (UserServiceRequest) returns (UserServiceResponse);
+}
+
