@@ -1,15 +1,21 @@
 package main
 
 import (
-	"context"
-
 	prod "github.com/TyrellJing/Hermes/go-kit-service/gorpc/server/proto"
+	"github.com/TyrellJing/Hermes/go-kit-service/gorpc/server/service"
+	"github.com/TyrellJing/Hermes/go-kit-service/gorpc/server/util"
+	"google.golang.org/grpc"
+	"net"
 )
 
-type ProdService struct {
 
+func main()  {
+	rpcSrv := grpc.NewServer(grpc.Creds(util.GetServerCert()))
+	prod.RegisterProdServiceServer(rpcSrv, new(service.ProdService))
+
+	listener, _ := net.Listen("tcp", ":8081")
+	rpcSrv.Serve(listener)
 }
 
-func (p *ProdService) GetProdStock(ctx context.Context, request *prod.ProdRequest) (*prod.ProdResponse, error) {
-	return &prod.ProdResponse{ProdStock: 20}, nil;
-}
+
+
