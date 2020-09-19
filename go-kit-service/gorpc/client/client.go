@@ -6,10 +6,12 @@ import (
 	"crypto/x509"
 	"fmt"
 	prod "github.com/TyrellJing/Hermes/go-kit-service/gorpc/client/proto"
+	"github.com/golang/protobuf/ptypes/timestamp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"io/ioutil"
 	"log"
+	"time"
 )
 
 func main()  {
@@ -28,12 +30,17 @@ func main()  {
 	}
 	defer conn.Close()
 
-	client := prod.NewProdServiceClient(conn)
-	response, err := client.GetProdStock(context.Background(), &prod.ProdRequest{
-		ProdId: 20,
+	client := prod.NewOrderServiceClient(conn)
+	t := timestamp.Timestamp{ Seconds: time.Now().Unix()}
+	response, err := client.NewOrder(context.Background(), &prod.OrderMain{
+		OrderId: 101,
+		OrderNo: "nd908323",
+		UserId: 123,
+		OrderMoney: 22.5,
+		OrderTime: &t,
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println(response.ProdStock)
+	fmt.Println(response)
 }
