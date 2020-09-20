@@ -13,6 +13,7 @@ func main()  {
 	rpcSrv := grpc.NewServer(grpc.Creds(util.GetServerCert()))
 	prod.RegisterProdServiceServer(rpcSrv, new(service.ProdService))
 	prod.RegisterOrderServiceServer(rpcSrv, new(service.OrderService))
+	prod.RegisterUserServiceServer(rpcSrv, new(service.UserService))
 
 	listener, _ := net.Listen("tcp", ":8081")
 	rpcSrv.Serve(listener)

@@ -15,7 +15,12 @@ func main() {
 	opt := []grpc.DialOption {
 		grpc.WithTransportCredentials(util.GetClientCert()),
 	}
-	err := prod.RegisterProdServiceHandlerFromEndpoint(context.Background(), gwmux, "localhost:8081", opt)
+	grpcEndPoint := "localhost:8081"
+	err := prod.RegisterProdServiceHandlerFromEndpoint(context.Background(), gwmux, grpcEndPoint, opt)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = prod.RegisterOrderServiceHandlerFromEndpoint(context.Background(), gwmux, grpcEndPoint, opt)
 	if err != nil {
 		log.Fatal(err)
 	}

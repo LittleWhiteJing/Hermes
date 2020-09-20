@@ -31,7 +31,7 @@ service ProdService {
       option (google.api.http) = {
           get: "/v1/prod/{prod_id}"
       };
-  };
+  }
   rpc GetProdStocks (ListRequest) returns (ListResponse) {}
   rpc GetProdInfo (ProdRequest) returns (ProdModel) {}
 }

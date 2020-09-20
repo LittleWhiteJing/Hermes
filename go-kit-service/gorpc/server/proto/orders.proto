@@ -1,6 +1,11 @@
 syntax="proto3";
 option go_package = ".;prod";
+import "google/api/annotations.proto";
 import "models.proto";
+
+message OrderRequest {
+  OrderMain order_main = 1;
+}
 
 message OrderResponse {
   string status = 1;
@@ -8,5 +13,10 @@ message OrderResponse {
 }
 
 service OrderService {
-  rpc NewOrder(OrderMain) returns (OrderResponse){}
+  rpc NewOrder(OrderRequest) returns (OrderResponse){
+    option (google.api.http) = {
+      post: "/v1/order"
+      body: "order_main"
+    };
+  }
 }
