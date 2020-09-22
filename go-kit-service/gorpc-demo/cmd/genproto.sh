@@ -1,4 +1,4 @@
-cd proto
+cd ../server/proto
 
 protoc --go_out=plugins=grpc:. prod.proto
 protoc --go_out=plugins=grpc:. --validate_out=lang=go:. models.proto
