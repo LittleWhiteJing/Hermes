@@ -27,7 +27,7 @@ func helloWorldDELETEHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func TestRouterRegister(t *testing.T) {
-	r := router.NewRouter()
+	r := radix_tree.NewRouter()
 
 	r.GET("/method/hello/get",   		helloWorldGETHandler)
 	r.POST("/method/hello/post", 		helloWorldPOSTHandler)

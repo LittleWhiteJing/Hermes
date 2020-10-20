@@ -33,7 +33,7 @@ type Server struct {
 
 }
 
-func NewServer(handler router.Router, addr string, readTimeout, writeTimeout time.Duration) *Server {
+func NewServer(handler radix_tree.Router, addr string, readTimeout, writeTimeout time.Duration) *Server {
 	isGraceful := false
 	if os.Getenv(GRACEFUL_ENVIRON_KEY) != "" {
 		isGraceful = true

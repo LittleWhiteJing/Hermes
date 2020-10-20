@@ -17,7 +17,7 @@ func sayGoodbyeHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	r := router.NewRouter()
+	r := radix_tree.NewRouter()
 	r.GET("/helloworld", helloWorldHandler)
 	r.GET("/saygoodbye", sayGoodbyeHandler)
 	s := server.NewServer(*r, "127.0.0.1:8000", 300*time.Second, 300*time.Second)
