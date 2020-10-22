@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"github.com/go-redis/redis"
 	"github.com/hashicorp/go-multierror"
 	"time"
@@ -183,7 +184,7 @@ var touchScript = `
 `
 
 func (rl *RedLock) touch(client redis.Client, value string, extend int) (bool, error) {
-	status, err := client.Eval(touchScript, []string{rl.name, value, string(extend)}).Result()
+	status, err := client.Eval(touchScript, []string{rl.name, value, fmt.Sprint(extend)}).Result()
 	if err != nil {
 		return false, err
 	}
