@@ -3,7 +3,6 @@ package distributed_lock
 import (
 	"fmt"
 	"github.com/go-redis/redis"
-	"github.com/google/uuid"
 	"sync"
 	"testing"
 	"time"
@@ -20,21 +19,19 @@ func TestSetnx(t *testing.T) {
 		t.Fatal("redis-service unavailable")
 	}
 
-	dLockR := NewDisLockRedis(rdb, "distributed-lock")
+	dLockR := NewDisLockRedis(rdb, "setNxLock-test")
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
 		go func(seq int) {
-			uuid := uuid.New()
-			uuidString := uuid.String()
 			for {
-				res, _ := dLockR.TryLock(uuidString)
+				res, _ := dLockR.TryLock()
 				if res == true {
-					fmt.Printf("goroutine:%d uuid:%s get lock success\n", seq, uuidString)
+					fmt.Printf("goroutine:%d get lock success\n", seq)
 					time.Sleep(3 * time.Second)
-					dLockR.UnLock(uuidString)
+					dLockR.UnLock()
 				} else {
-					fmt.Printf("goroutine:%d uuid:%s get lock failed\n", seq, uuidString)
+					fmt.Printf("goroutine:%d get lock failed\n", seq)
 				}
 				time.Sleep(1 * time.Second)
 			}

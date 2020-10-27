@@ -1,5 +1,14 @@
 package distributed_lock
 
+/**
+ *  基于redlock算法实现的高可用分布式锁
+ *  1.多个redis实例独立部署，故障隔离
+ *  2.并发锁请求，减少脑裂发生可能
+ *  3.加锁/解锁/续约，半数以上返回视为成功
+ *  4.若申请失败，主动释放锁
+ *  5.锁实际有效期 = 锁有效期 - 申请消耗时间(最后返回的goroutine-最先返回的goroutine) - 实例之间时间漂移(锁有效期*漂移因子)
+ */
+
 import (
 	"crypto/rand"
 	"encoding/base64"
