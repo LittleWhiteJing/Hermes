@@ -4,40 +4,46 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"sync"
 	"time"
 )
 
-const RoutineCount = 5
+const (
+	TaskTimeout	 = 5
+	MaxGoroutine = 10
+)
 
 var client *http.Client
 
 func main() {
 	numberTasks := []string{"13456755448", " 13419385751", "13419317885", " 13434343439", "13438522395"}
-	wg := &sync.WaitGroup{}
 	beg := time.Now()
-	tasks := make(chan string)
-	results := make(chan string)
-	//receiver
-	for i := 0; i < len(numberTasks); i++ {
-		result := <-results
-		fmt.Println("result:", result)
-	}
+	results := make([]chan string, len(numberTasks))
+	limiter := make(chan bool, MaxGoroutine)
 	//worker
-	for i := 0; i < RoutineCount; i++ {
-		wg.Add(1)
-		go worker(wg, tasks, results)
+	for i, numberTask := range numberTasks {
+		results[i] = make(chan string, 1)
+		limiter <- true
+		go worker(numberTask, TaskTimeout, limiter, results[i])
 	}
-	//caller
-	for _, task := range numberTasks {
-		tasks <- task
+	//receiver
+	for _, result := range results {
+		fmt.Println("result:", <-result)
 	}
-	wg.Wait()
 	fmt.Printf("time consumed: %fs", time.Now().Sub(beg).Seconds())
 }
 
-func worker(wg *sync.WaitGroup, tasks chan string, results chan string) {
-	task := <-tasks
+func worker(task string, timeout int, limiter chan bool, results chan string) {
+	receiver := make(chan string, 1)
+	go exec(task, limiter, receiver)
+	select {
+		case rs := <-receiver:
+			results <- rs
+		case <-time.After(time.Duration(timeout) * time.Second):
+			results <- "task run out of time"
+	}
+}
+
+func exec(task string, limiter chan bool, results chan string) {
 	respBody, err := NumberQueryRequest(task)
 	if err != nil{
 		fmt.Printf("error occurred in NumberQueryRequest: %s\n", task)
@@ -45,7 +51,7 @@ func worker(wg *sync.WaitGroup, tasks chan string, results chan string) {
 	}else{
 		results <- string(respBody)
 	}
-	wg.Done()
+	<-limiter
 }
 
 func NumberQueryRequest(keyword string)(body []byte, err error){
